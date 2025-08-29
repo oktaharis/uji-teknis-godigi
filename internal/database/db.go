@@ -20,12 +20,18 @@ func Connect(cfg *config.Config) *gorm.DB {
 		log.Fatalf("db connect error: %v", err)
 	}
 
-	// HANYA migrasi tabel internal yang belum ada di schema perusahaan
-	if err := db.AutoMigrate(
-		&models.User{},
-		&models.PasswordReset{},
-		&models.Project{},
-	); err != nil {
+	// Pastikan tabel perusahaan ada (tanpa ALTER)
+	if err := EnsureCompanyTables(db); err != nil {
+		log.Fatalf("bootstrap company tables error: %v", err)
+	}
+
+	// Migrasi tabel internal saja
+	if err := db.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4").
+		AutoMigrate(
+			&models.User{},
+			&models.PasswordReset{},
+			&models.Project{},
+		); err != nil {
 		log.Fatalf("auto-migrate error: %v", err)
 	}
 
