@@ -24,6 +24,7 @@ func Connect(cfg *config.Config) *gorm.DB {
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.PasswordReset{},
+		&models.Project{},
 	); err != nil {
 		log.Fatalf("auto-migrate error: %v", err)
 	}

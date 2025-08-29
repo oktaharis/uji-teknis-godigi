@@ -22,6 +22,8 @@ func SetupRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 	ah := handlers.NewAuthHandler(cfg, db)
 	uh := handlers.NewUserHandler()
 	lh := handlers.NewLeadHandler(db)
+	ph := handlers.NewProjectHandler(db)
+	uah := handlers.NewUserAdminHandler(db)
 
 	// Public
 	pub := r.Group("/auth")
@@ -45,6 +47,22 @@ func SetupRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 		api.GET("/leads/:id", lh.Get)
 		api.PUT("/leads/:id", lh.Update)
 		api.DELETE("/leads/:id", lh.Delete)
+	}
+	
+	api.POST("/projects", ph.Create)
+    api.GET("/projects", ph.List)
+    api.GET("/projects/:id", ph.Get)
+    api.PUT("/projects/:id", ph.Update)
+    api.DELETE("/projects/:id", ph.Delete)
+
+	admin := r.Group("/admin")
+	admin.Use(auth.AdminOnly())
+	{
+		admin.POST("/users", uah.Create)
+		admin.GET("/users", uah.List)
+		admin.GET("/users/:id", uah.Get)
+		admin.PUT("/users/:id", uah.Update)
+		admin.DELETE("/users/:id", uah.Delete)
 	}
 
 	return r

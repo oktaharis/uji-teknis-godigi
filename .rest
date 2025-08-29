@@ -4,7 +4,9 @@
 @password = secret123
 @new_password = newSecret123
 
+### Healthcheck
 GET {{host}}/healthz
+
 
 ### Register
 # @name register
@@ -16,6 +18,7 @@ Content-Type: application/json
   "email": "{{email}}",
   "password": "{{password}}"
 }
+
 
 ### Login (capture JWT token)
 # @name login
@@ -30,13 +33,16 @@ Content-Type: application/json
 ### Example: Use the captured token from login response
 ### Token = {{login.response.body.$.token}}
 
+
 ### Profile (Me)
 GET {{host}}/me
 Authorization: Bearer {{login.response.body.$.token}}
 
+
 ### Logout
 POST {{host}}/auth/logout
 Authorization: Bearer {{login.response.body.$.token}}
+
 
 ### Forgot Password (capture reset token - test mode)
 # @name forgot
@@ -47,6 +53,7 @@ Content-Type: application/json
   "email": "{{email}}"
 }
 
+
 ### Reset Password (use token from Forgot Password)
 POST {{host}}/auth/reset-password
 Content-Type: application/json
@@ -55,6 +62,7 @@ Content-Type: application/json
   "token": "{{forgot.response.body.$.reset_token}}",
   "new_password": "{{new_password}}"
 }
+
 
 ### Login again with new password (refresh token)
 # @name login2
@@ -65,6 +73,12 @@ Content-Type: application/json
   "email": "{{email}}",
   "password": "{{new_password}}"
 }
+
+
+
+/* =========================
+   LEADS: CRUD + SUMMARY
+   ========================= */
 
 ### Create Lead (capture created lead id)
 # @name createLead
@@ -107,9 +121,85 @@ Content-Type: application/json
 }
 
 ### Leads Summary (date range)
-GET {{host}}/leads/summary?from=2025-08-01&to=2025-08-31
+GET {{host}}/leads/summary
 Authorization: Bearer {{login2.response.body.$.token}}
 
 ### Delete Lead
 DELETE {{host}}/leads/{{createLead.response.body.$.id}}
+Authorization: Bearer {{login2.response.body.$.token}}
+
+
+### (ADMIN) Create User
+# @name adminCreateUser
+POST {{host}}/admin/users
+Authorization: Bearer {{login2.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "name": "Admin User",
+  "email": "admin@example.com",
+  "password": "admin123",
+  "role": "admin"
+}
+
+### (ADMIN) List Users
+GET {{host}}/admin/users?q=okta&page=1&per_page=10
+Authorization: Bearer {{login2.response.body.$.token}}
+
+### (ADMIN) Get User by ID
+GET {{host}}/admin/users/1
+Authorization: Bearer {{login2.response.body.$.token}}
+
+### (ADMIN) Update User (role)
+PUT {{host}}/admin/users/1
+Authorization: Bearer {{login2.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "role": "admin"
+}
+
+### (ADMIN) Delete User
+DELETE {{host}}/admin/users/1
+Authorization: Bearer {{login2.response.body.$.token}}
+
+
+
+/* =========================
+   MANAGEMENT PROJECT
+   ========================= */
+
+### Projects - Create (capture project id)
+# @name createProject
+POST {{host}}/projects
+Authorization: Bearer {{login2.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "name": "Godigi CRM",
+  "description": "Internal CRM untuk tim sales",
+  "status": "planned",
+  "start_date": "2025-09-01"
+}
+
+### Projects - List
+GET {{host}}/projects?q=CRM&status=planned&page=1&per_page=10
+Authorization: Bearer {{login2.response.body.$.token}}
+
+### Projects - Get by ID
+GET {{host}}/projects/{{createProject.response.body.$.id}}
+Authorization: Bearer {{login2.response.body.$.token}}
+
+### Projects - Update
+PUT {{host}}/projects/{{createProject.response.body.$.id}}
+Authorization: Bearer {{login2.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "status": "in_progress",
+  "end_date": "2025-12-31"
+}
+
+### Projects - Delete
+DELETE {{host}}/projects/{{createProject.response.body.$.id}}
 Authorization: Bearer {{login2.response.body.$.token}}

@@ -47,3 +47,18 @@ func AuthRequired(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 		c.Next()
 	}
 }
+func AdminOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		u, ok := c.Get("user")
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code":"UNAUTHORIZED","message":"no user in context"}})
+			return
+		}
+		user := u.(models.User)
+		if user.Role != "admin" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"code":"FORBIDDEN","message":"admin only"}})
+			return
+		}
+		c.Next()
+	}
+}

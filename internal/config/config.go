@@ -10,7 +10,7 @@ type Config struct {
 	Port       string
 	DBDSN      string
 	JWTSecret  string
-	JWTExpires int64 // seconds
+	JWTExpires int64
 }
 
 func Load() *Config {
