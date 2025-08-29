@@ -174,8 +174,13 @@ func (h *LeadHandler) Summary(c *gin.Context) {
 		Key   string
 		Count int64
 	}
+	// Hindari alias 'key' karena reserved word di MySQL/MariaDB
+	type rowAgg struct {
+		Name  *string `gorm:"column:name"`
+		Count int64   `gorm:"column:count"`
+	}
 	by := func(field string) map[string]int64 {
-		var rows []KV
+		var rows []rowAgg
 		res := map[string]int64{}
 		sub := h.DB.Model(&models.Lead{})
 		if from != "" {
@@ -184,9 +189,13 @@ func (h *LeadHandler) Summary(c *gin.Context) {
 		if to != "" {
 			sub = sub.Where("created_at < ?", toT.Add(24*time.Hour))
 		}
-		sub.Select(field + " as key, COUNT(*) as count").Group(field).Scan(&rows)
+		sub.Select(field + " AS name, COUNT(*) AS count").Group(field).Scan(&rows)
 		for _, r := range rows {
-			res[r.Key] = r.Count
+			k := ""
+			if r.Name != nil {
+				k = *r.Name
+			}
+			res[k] = r.Count
 		}
 		return res
 	}
@@ -211,7 +220,7 @@ func (h *LeadHandler) Summary(c *gin.Context) {
 	}
 	dq.Select("COUNT(*) as count, COALESCE(SUM(amount_idr),0) as total, COALESCE(AVG(term_months),0) as avg").Scan(&agg)
 
-	var byStage []KV
+	var byStageRows []rowAgg
 	dqStages := h.DB.Model(&models.Deal{})
 	if from != "" {
 		dqStages = dqStages.Where("closed_at >= ?", fromT)
@@ -219,10 +228,14 @@ func (h *LeadHandler) Summary(c *gin.Context) {
 	if to != "" {
 		dqStages = dqStages.Where("closed_at < ?", toT.Add(24*time.Hour))
 	}
-	dqStages.Select("stage as key, COUNT(*) as count").Group("stage").Scan(&byStage)
+	dqStages.Select("stage AS name, COUNT(*) AS count").Group("stage").Scan(&byStageRows)
 	stageMap := map[string]int64{}
-	for _, r := range byStage {
-		stageMap[r.Key] = r.Count
+	for _, r := range byStageRows {
+		k := ""
+		if r.Name != nil {
+			k = *r.Name
+		}
+		stageMap[k] = r.Count
 	}
 
 	c.JSON(http.StatusOK, gin.H{
