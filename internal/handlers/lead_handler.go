@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"net/http"
 	"strconv"
 	"time"
 
@@ -9,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/oktaharis/uji-teknis-godigi/internal/models"
+	"github.com/oktaharis/uji-teknis-godigi/internal/response"
 )
 
 type LeadHandler struct {
@@ -33,7 +33,7 @@ type leadPayload struct {
 func (h *LeadHandler) Create(c *gin.Context) {
 	var p leadPayload
 	if err := c.ShouldBindJSON(&p); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": gin.H{"code": "VALIDATION", "message": "invalid payload"}})
+		response.UnprocessableEntity(c, "Validation Error", response.ExtractValidationErrors(err))
 		return
 	}
 	lead := models.Lead{
@@ -49,10 +49,12 @@ func (h *LeadHandler) Create(c *gin.Context) {
 		Notes:       p.Notes,
 	}
 	if err := h.DB.Create(&lead).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INTERNAL", "message": "failed to create lead"}})
+		response.InternalError(c, "Failed to create lead")
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"id": lead.LeadID, "company_name": lead.CompanyName, "status": lead.Status, "created_at": lead.CreatedAt})
+	response.Created(c, gin.H{
+		"id": lead.LeadID, "company_name": lead.CompanyName, "status": lead.Status, "created_at": lead.CreatedAt,
+	}, "Lead created")
 }
 
 func (h *LeadHandler) List(c *gin.Context) {
@@ -83,32 +85,32 @@ func (h *LeadHandler) List(c *gin.Context) {
 	q.Count(&total)
 
 	if err := q.Order("created_at DESC").Limit(per).Offset(offset).Find(&leads).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INTERNAL", "message": "failed to list leads"}})
+		response.InternalError(c, "Failed to list leads")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": leads, "pagination": gin.H{"page": page, "per_page": per, "total": total}})
+	response.OK(c, response.List(leads, page, per, total), "Lead list")
 }
 
 func (h *LeadHandler) Get(c *gin.Context) {
 	id := c.Param("id")
 	var lead models.Lead
 	if err := h.DB.First(&lead, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "NOT_FOUND", "message": "lead not found"}})
+		response.NotFound(c, "Lead not found")
 		return
 	}
-	c.JSON(http.StatusOK, lead)
+	response.OK(c, lead, "Lead detail")
 }
 
 func (h *LeadHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var lead models.Lead
 	if err := h.DB.First(&lead, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "NOT_FOUND", "message": "lead not found"}})
+		response.NotFound(c, "Lead not found")
 		return
 	}
 	var p leadPayload
 	if err := c.ShouldBindJSON(&p); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": gin.H{"code": "VALIDATION", "message": "invalid payload"}})
+		response.UnprocessableEntity(c, "Validation Error", response.ExtractValidationErrors(err))
 		return
 	}
 	lead.CompanyName = p.CompanyName
@@ -123,22 +125,22 @@ func (h *LeadHandler) Update(c *gin.Context) {
 	lead.Notes = p.Notes
 
 	if err := h.DB.Save(&lead).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INTERNAL", "message": "failed to update lead"}})
+		response.InternalError(c, "Failed to update lead")
 		return
 	}
-	c.JSON(http.StatusOK, lead)
+	response.OK(c, lead, "Lead updated")
 }
 
 func (h *LeadHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.DB.Delete(&models.Lead{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "INTERNAL", "message": "failed to delete lead"}})
+		response.InternalError(c, "Failed to delete lead")
 		return
 	}
-	c.Status(http.StatusNoContent)
+	response.NoContent(c, "Lead deleted")
 }
 
-// /leads/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
+// GET /leads/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
 func (h *LeadHandler) Summary(c *gin.Context) {
 	from := c.Query("from")
 	to := c.Query("to")
@@ -170,11 +172,6 @@ func (h *LeadHandler) Summary(c *gin.Context) {
 	var total int64
 	q.Count(&total)
 
-	type KV struct {
-		Key   string
-		Count int64
-	}
-	// Hindari alias 'key' karena reserved word di MySQL/MariaDB
 	type rowAgg struct {
 		Name  *string `gorm:"column:name"`
 		Count int64   `gorm:"column:count"`
@@ -189,7 +186,7 @@ func (h *LeadHandler) Summary(c *gin.Context) {
 		if to != "" {
 			sub = sub.Where("created_at < ?", toT.Add(24*time.Hour))
 		}
-		sub.Select(field + " AS name, COUNT(*) AS count").Group(field).Scan(&rows)
+		sub.Select(field+" AS name, COUNT(*) AS count").Group(field).Scan(&rows)
 		for _, r := range rows {
 			k := ""
 			if r.Name != nil {
@@ -204,7 +201,7 @@ func (h *LeadHandler) Summary(c *gin.Context) {
 	bySource := by("source")
 	byRegion := by("region")
 
-	// deals aggregate in range (by closed_at)
+	// deals aggregate (by closed_at)
 	type DealAgg struct {
 		Count int64
 		Total int64   `gorm:"column:total"`
@@ -238,7 +235,7 @@ func (h *LeadHandler) Summary(c *gin.Context) {
 		stageMap[k] = r.Count
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.OK(c, gin.H{
 		"total_leads": total,
 		"by_status":   byStatus,
 		"by_source":   bySource,
@@ -249,5 +246,5 @@ func (h *LeadHandler) Summary(c *gin.Context) {
 			"avg_term_months":  agg.Avg,
 			"by_stage":         stageMap,
 		},
-	})
+	}, "Lead summary")
 }

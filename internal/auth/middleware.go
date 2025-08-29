@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/oktaharis/uji-teknis-godigi/internal/config"
 	"github.com/oktaharis/uji-teknis-godigi/internal/models"
+	"github.com/oktaharis/uji-teknis-godigi/internal/response"
 )
 
 func AuthRequired(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
@@ -17,48 +17,43 @@ func AuthRequired(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 		h := c.GetHeader("Authorization")
 		parts := strings.SplitN(h, " ", 2)
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code": "UNAUTHORIZED", "message": "missing bearer token"}})
+			response.Unauthorized(c, "missing bearer token")
+			c.Abort()
 			return
 		}
+
 		tokenStr := parts[1]
 		token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (interface{}, error) {
 			return []byte(cfg.JWTSecret), nil
 		})
 		if err != nil || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code": "UNAUTHORIZED", "message": "invalid or expired token"}})
+			response.Unauthorized(c, "invalid or expired token")
+			c.Abort()
 			return
 		}
+
 		claims, ok := token.Claims.(*Claims)
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code": "UNAUTHORIZED", "message": "invalid claims"}})
+			response.Unauthorized(c, "invalid claims")
+			c.Abort()
 			return
 		}
+
 		var user models.User
 		if err := db.First(&user, claims.UserID).Error; err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code": "UNAUTHORIZED", "message": "user not found"}})
+			response.Unauthorized(c, "user not found")
+			c.Abort()
 			return
 		}
+
 		// Token-version check (logout invalidation)
 		if user.TokenVersion != claims.TokenVersion {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code": "UNAUTHORIZED", "message": "token revoked"}})
+			response.Unauthorized(c, "token revoked")
+			c.Abort()
 			return
 		}
+
 		c.Set("user", user)
-		c.Next()
-	}
-}
-func AdminOnly() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		u, ok := c.Get("user")
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code":"UNAUTHORIZED","message":"no user in context"}})
-			return
-		}
-		user := u.(models.User)
-		if user.Role != "admin" {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"code":"FORBIDDEN","message":"admin only"}})
-			return
-		}
 		c.Next()
 	}
 }

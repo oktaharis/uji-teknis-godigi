@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"net/http"
 	"strconv"
 	"time"
 
@@ -9,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/oktaharis/uji-teknis-godigi/internal/models"
+	"github.com/oktaharis/uji-teknis-godigi/internal/response"
 )
 
 type ProjectHandler struct{ DB *gorm.DB }
@@ -25,20 +25,26 @@ type projectPayload struct {
 }
 
 func parseDatePtr(s *string) *time.Time {
-	if s == nil || *s == "" { return nil }
+	if s == nil || *s == "" {
+		return nil
+	}
 	t, err := time.Parse("2006-01-02", *s)
-	if err != nil { return nil }
+	if err != nil {
+		return nil
+	}
 	return &t
 }
 
 func (h *ProjectHandler) Create(c *gin.Context) {
 	var p projectPayload
 	if err := c.ShouldBindJSON(&p); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": gin.H{"code":"VALIDATION","message":"invalid payload"}})
+		response.UnprocessableEntity(c, "Validation Error", response.ExtractValidationErrors(err))
 		return
 	}
 	status := "planned"
-	if p.Status != nil { status = *p.Status }
+	if p.Status != nil {
+		status = *p.Status
+	}
 	proj := models.Project{
 		Name:        p.Name,
 		Description: p.Description,
@@ -48,10 +54,10 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 		OwnerUserID: p.OwnerUserID,
 	}
 	if err := h.DB.Create(&proj).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code":"INTERNAL","message":"failed to create project"}})
+		response.InternalError(c, "Failed to create project")
 		return
 	}
-	c.JSON(http.StatusCreated, proj)
+	response.Created(c, proj, "Project created")
 }
 
 func (h *ProjectHandler) List(c *gin.Context) {
@@ -65,57 +71,73 @@ func (h *ProjectHandler) List(c *gin.Context) {
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	per, _ := strconv.Atoi(c.DefaultQuery("per_page", "10"))
-	if page < 1 { page = 1 }
-	if per  < 1 { per  = 10 }
+	if page < 1 {
+		page = 1
+	}
+	if per < 1 {
+		per = 10
+	}
 	var total int64
 	q.Count(&total)
 	if err := q.Order("created_at DESC").Limit(per).Offset((page-1)*per).Find(&items).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code":"INTERNAL","message":"failed to list projects"}})
+		response.InternalError(c, "Failed to list projects")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": items, "pagination": gin.H{"page": page, "per_page": per, "total": total}})
+	response.OK(c, response.List(items, page, per, total), "Project list")
 }
 
 func (h *ProjectHandler) Get(c *gin.Context) {
 	id := c.Param("id")
 	var item models.Project
 	if err := h.DB.First(&item, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code":"NOT_FOUND","message":"project not found"}})
+		response.NotFound(c, "Project not found")
 		return
 	}
-	c.JSON(http.StatusOK, item)
+	response.OK(c, item, "Project detail")
 }
 
 func (h *ProjectHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var item models.Project
 	if err := h.DB.First(&item, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code":"NOT_FOUND","message":"project not found"}})
+		response.NotFound(c, "Project not found")
 		return
 	}
 	var p projectPayload
 	if err := c.ShouldBindJSON(&p); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": gin.H{"code":"VALIDATION","message":"invalid payload"}})
+		response.UnprocessableEntity(c, "Validation Error", response.ExtractValidationErrors(err))
 		return
 	}
-	if p.Name != "" { item.Name = p.Name }
-	if p.Description != nil { item.Description = p.Description }
-	if p.Status != nil { item.Status = *p.Status }
-	if p.StartDate != nil { item.StartDate = parseDatePtr(p.StartDate) }
-	if p.EndDate != nil { item.EndDate = parseDatePtr(p.EndDate) }
-	if p.OwnerUserID != nil { item.OwnerUserID = p.OwnerUserID }
+	if p.Name != "" {
+		item.Name = p.Name
+	}
+	if p.Description != nil {
+		item.Description = p.Description
+	}
+	if p.Status != nil {
+		item.Status = *p.Status
+	}
+	if p.StartDate != nil {
+		item.StartDate = parseDatePtr(p.StartDate)
+	}
+	if p.EndDate != nil {
+		item.EndDate = parseDatePtr(p.EndDate)
+	}
+	if p.OwnerUserID != nil {
+		item.OwnerUserID = p.OwnerUserID
+	}
 	if err := h.DB.Save(&item).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code":"INTERNAL","message":"failed to update project"}})
+		response.InternalError(c, "Failed to update project")
 		return
 	}
-	c.JSON(http.StatusOK, item)
+	response.OK(c, item, "Project updated")
 }
 
 func (h *ProjectHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.DB.Delete(&models.Project{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code":"INTERNAL","message":"failed to delete project"}})
+		response.InternalError(c, "Failed to delete project")
 		return
 	}
-	c.Status(http.StatusNoContent)
+	response.NoContent(c, "Project deleted")
 }

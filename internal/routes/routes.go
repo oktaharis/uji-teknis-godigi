@@ -1,22 +1,26 @@
 package routes
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"github.com/oktaharis/uji-teknis-godigi/internal/auth"
 	"github.com/oktaharis/uji-teknis-godigi/internal/config"
 	"github.com/oktaharis/uji-teknis-godigi/internal/handlers"
+	"github.com/oktaharis/uji-teknis-godigi/internal/middleware"
+	"github.com/oktaharis/uji-teknis-godigi/internal/response"
 )
 
 func SetupRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+
+	// Add middlewares
+	r.Use(middleware.JSONRecovery())
+	r.NoRoute(middleware.NotFoundHandler())
 
 	// health
 	r.GET("/healthz", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		response.OK(c, gin.H{"status": "ok"}, "Health check")
 	})
 
 	ah := handlers.NewAuthHandler(cfg, db)
