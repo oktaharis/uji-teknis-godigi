@@ -1,0 +1,115 @@
+@host = http://localhost:8080
+@name = Okta Haris
+@email = okta@example.com
+@password = secret123
+@new_password = newSecret123
+
+GET {{host}}/healthz
+
+### Register
+# @name register
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "{{name}}",
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Login (capture JWT token)
+# @name login
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Example: Use the captured token from login response
+### Token = {{login.response.body.$.token}}
+
+### Profile (Me)
+GET {{host}}/me
+Authorization: Bearer {{login.response.body.$.token}}
+
+### Logout
+POST {{host}}/auth/logout
+Authorization: Bearer {{login.response.body.$.token}}
+
+### Forgot Password (capture reset token - test mode)
+# @name forgot
+POST {{host}}/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
+
+### Reset Password (use token from Forgot Password)
+POST {{host}}/auth/reset-password
+Content-Type: application/json
+
+{
+  "token": "{{forgot.response.body.$.reset_token}}",
+  "new_password": "{{new_password}}"
+}
+
+### Login again with new password (refresh token)
+# @name login2
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{new_password}}"
+}
+
+### Create Lead (capture created lead id)
+# @name createLead
+POST {{host}}/leads
+Authorization: Bearer {{login2.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "company_name": "PT Godigi",
+  "contact_name": "Budi",
+  "email": "budi@godigi.co.id",
+  "phone": "081234567890",
+  "source": "website",
+  "industry": "IT",
+  "region": "Jabodetabek",
+  "sales_rep": "Okta",
+  "status": "New",
+  "notes": "Inquired via landing page"
+}
+
+### Get Lead by ID
+GET {{host}}/leads/{{createLead.response.body.$.id}}
+Authorization: Bearer {{login2.response.body.$.token}}
+
+### List Leads (with basic filters & pagination)
+GET {{host}}/leads?q=Godigi&status=New&page=1&per_page=10
+Authorization: Bearer {{login2.response.body.$.token}}
+
+### Update Lead
+PUT {{host}}/leads/{{createLead.response.body.$.id}}
+Authorization: Bearer {{login2.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "company_name": "PT Godigi",
+  "contact_name": "Budi",
+  "email": "budi@godigi.co.id",
+  "status": "Qualified",
+  "notes": "Booked demo"
+}
+
+### Leads Summary (date range)
+GET {{host}}/leads/summary?from=2025-08-01&to=2025-08-31
+Authorization: Bearer {{login2.response.body.$.token}}
+
+### Delete Lead
+DELETE {{host}}/leads/{{createLead.response.body.$.id}}
+Authorization: Bearer {{login2.response.body.$.token}}

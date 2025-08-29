@@ -1,0 +1,51 @@
+package routes
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+
+	"github.com/oktaharis/uji-teknis-godigi/internal/auth"
+	"github.com/oktaharis/uji-teknis-godigi/internal/config"
+	"github.com/oktaharis/uji-teknis-godigi/internal/handlers"
+)
+
+func SetupRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
+	r := gin.Default()
+
+	// health
+	r.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	ah := handlers.NewAuthHandler(cfg, db)
+	uh := handlers.NewUserHandler()
+	lh := handlers.NewLeadHandler(db)
+
+	// Public
+	pub := r.Group("/auth")
+	{
+		pub.POST("/register", ah.Register)
+		pub.POST("/login", ah.Login)
+		pub.POST("/forgot-password", ah.ForgotPassword)
+		pub.POST("/reset-password", ah.ResetPassword)
+	}
+
+	// Protected
+	api := r.Group("/")
+	api.Use(auth.AuthRequired(cfg, db))
+	{
+		api.POST("/auth/logout", ah.Logout)
+		api.GET("/me", uh.Me)
+
+		api.POST("/leads", lh.Create)
+		api.GET("/leads", lh.List)
+		api.GET("/leads/summary", lh.Summary)
+		api.GET("/leads/:id", lh.Get)
+		api.PUT("/leads/:id", lh.Update)
+		api.DELETE("/leads/:id", lh.Delete)
+	}
+
+	return r
+}
